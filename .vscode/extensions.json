@@ -1,0 +1,15 @@
+{
+  "recommendations": [
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "bradlc.vscode-tailwindcss",
+    "dsznajder.es7-react-js-snippets",
+    "ms-python.python",
+    "ms-python.vscode-pylance",
+    "charliermarsh.ruff",
+    "eamodio.gitlens",
+    "github.vscode-pull-request-github",
+    "rangav.vscode-thunder-client",
+    "tamasfe.even-better-toml"
+  ]
+}
