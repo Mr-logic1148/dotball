@@ -16,6 +16,14 @@ export default function Home() {
           analysts. Set fields, plan matchups, scout opponents, and read the
           game live.
         </p>
+        <nav className="mt-6 flex gap-3 text-sm">
+          <a
+            href="/wagon-wheel"
+            className="rounded-md bg-pitch-900 px-3 py-1.5 text-white hover:bg-pitch-600"
+          >
+            Wagon wheel &rarr;
+          </a>
+        </nav>
       </header>
 
       <section
