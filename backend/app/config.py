@@ -1,10 +1,4 @@
-"""Application settings, loaded once from environment / .env file.
-
-Import the `settings` singleton anywhere you need configuration:
-
-    from app.config import settings
-    print(settings.database_url)
-"""
+"""Application settings, loaded once from environment / .env file."""
 
 from functools import lru_cache
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -18,16 +12,20 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # Default to SQLite for zero-install local dev. Override with Postgres
-    # by setting DATABASE_URL in your .env when you're ready to scale up.
     database_url: str = "sqlite:///./dotball.db"
     redis_url: str = "redis://localhost:6379/0"
 
+    # CricAPI key for live IPL data. Get a free key at https://cricapi.com.
+    # We re-use the existing env var name for backward compat.
     cricbuzz_api_key: str = ""
     rapidapi_key: str = ""
     sportradar_api_key: str = ""
 
-    jwt_secret: str = "change-me"
+    # IMPORTANT: change this in production. JWT tokens are signed with it.
+    jwt_secret: str = "dev-only-change-this-in-production-please-32chars-min"
+
+    # Frontend origin for CORS — adjust if you deploy.
+    frontend_origin: str = "http://localhost:3000"
 
 
 @lru_cache

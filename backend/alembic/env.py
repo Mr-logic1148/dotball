@@ -1,9 +1,4 @@
-"""Alembic environment.
-
-We override `sqlalchemy.url` from app settings so it always matches the
-DATABASE_URL in your .env. The target metadata is our SQLAlchemy Base,
-which makes `alembic revision --autogenerate` actually useful.
-"""
+"""Alembic environment."""
 
 from logging.config import fileConfig
 
@@ -11,7 +6,8 @@ from alembic import context
 from sqlalchemy import engine_from_config, pool
 
 from app.config import settings
-from app.models.cricket import Base
+from app.models.cricket import Base  # noqa: F401  (registers tables)
+from app.models import auth as _auth  # noqa: F401  (registers tables)
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.database_url)
