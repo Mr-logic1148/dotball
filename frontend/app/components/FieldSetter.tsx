@@ -1,228 +1,237 @@
 "use client";
+
+import { motion } from "framer-motion";
 import { useMemo, useState } from "react";
 
 type Phase = "powerplay" | "middle" | "death";
 type Bowler = "pace" | "lpace" | "offspin" | "legspin";
 type Batter = "rhb" | "lhb";
 
-type Fielder = { x: number; y: number; label: string };
-type Setup = {
+interface Fielder {
+  x: number;
+  y: number;
+  num: number;
+  name: string; // canonical position name
+  role: "bowler" | "keeper" | "fielder";
+}
+
+interface Setup {
   name: string;
   inside: number;
   outside: number;
   text: string;
   pos: Fielder[];
-};
+}
 
-// Bucket spin types together for now; differentiate later as data fills in.
 const bucket = (b: Bowler): "pace" | "spin" =>
   b === "pace" || b === "lpace" ? "pace" : "spin";
 
-// Preset library: 12 setups covering 3 phases x 2 bowler buckets x 2 batter types.
-// Coordinates are on a 360x360 SVG with stumps at (180, 180) and a 170-radius boundary.
+// All coordinates use a 400x400 SVG with stumps at (200, 200) and a 188 boundary.
+// Positions are calculated geometrically from canonical cricket angles so the
+// field looks accurate, not arbitrary. Inner ring = radius 110.
 const SETUPS: Record<string, Setup> = {
   powerplay_pace_rhb: {
     name: "Attacking powerplay",
     inside: 7,
     outside: 2,
-    text: "Two slips, gully, point in the ring. Mid-off and mid-on up. Fine leg and third man are the only sweepers — force the false shot.",
+    text: "Two slips and gully attack the edge. Mid-off and mid-on up. Third man and fine leg out — force the false shot.",
     pos: [
-      { x: 180, y: 90, label: "BWL" },
-      { x: 225, y: 140, label: "SLP" },
-      { x: 245, y: 155, label: "GLY" },
-      { x: 260, y: 200, label: "PNT" },
-      { x: 230, y: 250, label: "COV" },
-      { x: 150, y: 250, label: "MDO" },
-      { x: 110, y: 210, label: "MDW" },
-      { x: 120, y: 90, label: "TM" },
-      { x: 270, y: 90, label: "FL" },
+      { x: 200, y: 145, num: 1, name: "Bowler", role: "bowler" },
+      { x: 215, y: 235, num: 2, name: "Wicketkeeper", role: "keeper" },
+      { x: 244, y: 232, num: 3, name: "Slip", role: "fielder" },
+      { x: 270, y: 220, num: 4, name: "Gully", role: "fielder" },
+      { x: 280, y: 175, num: 5, name: "Point", role: "fielder" },
+      { x: 252, y: 132, num: 6, name: "Mid-off", role: "fielder" },
+      { x: 148, y: 132, num: 7, name: "Mid-on", role: "fielder" },
+      { x: 320, y: 305, num: 8, name: "Third man", role: "fielder" },
+      { x: 80, y: 305, num: 9, name: "Fine leg", role: "fielder" },
     ],
   },
   powerplay_pace_lhb: {
     name: "Attacking powerplay vs LHB",
     inside: 7,
     outside: 2,
-    text: "Mirror the field: slip and gully on the LHB off side. Pack the off side; bowl fourth-stump line and induce the drive.",
+    text: "Mirror the cordon to the LHB off side. Bowl fourth stump; induce the drive.",
     pos: [
-      { x: 180, y: 90, label: "BWL" },
-      { x: 135, y: 140, label: "SLP" },
-      { x: 115, y: 155, label: "GLY" },
-      { x: 100, y: 200, label: "PNT" },
-      { x: 130, y: 250, label: "COV" },
-      { x: 210, y: 250, label: "MDO" },
-      { x: 250, y: 210, label: "MDW" },
-      { x: 240, y: 90, label: "TM" },
-      { x: 90, y: 90, label: "FL" },
+      { x: 200, y: 145, num: 1, name: "Bowler", role: "bowler" },
+      { x: 185, y: 235, num: 2, name: "Wicketkeeper", role: "keeper" },
+      { x: 156, y: 232, num: 3, name: "Slip", role: "fielder" },
+      { x: 130, y: 220, num: 4, name: "Gully", role: "fielder" },
+      { x: 120, y: 175, num: 5, name: "Point", role: "fielder" },
+      { x: 148, y: 132, num: 6, name: "Mid-off", role: "fielder" },
+      { x: 252, y: 132, num: 7, name: "Mid-on", role: "fielder" },
+      { x: 80, y: 305, num: 8, name: "Third man", role: "fielder" },
+      { x: 320, y: 305, num: 9, name: "Fine leg", role: "fielder" },
     ],
   },
   powerplay_spin_rhb: {
     name: "Spin in powerplay",
     inside: 6,
     outside: 3,
-    text: "Slip in, short cover, short midwicket. Deep midwicket and long-on protect the slog. Attack the stumps, tempt the lofted hit.",
+    text: "Attack the stumps. Short cover and short midwicket choke; deep midwicket and long-on protect the slog.",
     pos: [
-      { x: 180, y: 90, label: "BWL" },
-      { x: 220, y: 135, label: "SLP" },
-      { x: 245, y: 210, label: "PNT" },
-      { x: 210, y: 235, label: "SCV" },
-      { x: 145, y: 235, label: "SMW" },
-      { x: 125, y: 205, label: "MDW" },
-      { x: 180, y: 300, label: "LON" },
-      { x: 80, y: 260, label: "DMW" },
-      { x: 280, y: 90, label: "TM" },
+      { x: 200, y: 145, num: 1, name: "Bowler", role: "bowler" },
+      { x: 215, y: 235, num: 2, name: "Wicketkeeper", role: "keeper" },
+      { x: 270, y: 200, num: 3, name: "Point", role: "fielder" },
+      { x: 245, y: 155, num: 4, name: "Short cover", role: "fielder" },
+      { x: 155, y: 155, num: 5, name: "Short midwicket", role: "fielder" },
+      { x: 130, y: 200, num: 6, name: "Square leg", role: "fielder" },
+      { x: 70, y: 130, num: 7, name: "Deep midwicket", role: "fielder" },
+      { x: 200, y: 60, num: 8, name: "Long-on", role: "fielder" },
+      { x: 330, y: 130, num: 9, name: "Deep cover", role: "fielder" },
     ],
   },
   powerplay_spin_lhb: {
     name: "Spin in powerplay vs LHB",
     inside: 6,
     outside: 3,
-    text: "Bowl into the stumps. Short cover and short midwicket choke singles; deep cover and long-on guard the hit zones.",
+    text: "Bowl into the stumps. Short cover and short midwicket choke singles.",
     pos: [
-      { x: 180, y: 90, label: "BWL" },
-      { x: 140, y: 135, label: "SLP" },
-      { x: 115, y: 210, label: "PNT" },
-      { x: 150, y: 235, label: "SCV" },
-      { x: 215, y: 235, label: "SMW" },
-      { x: 235, y: 205, label: "MDW" },
-      { x: 180, y: 300, label: "LON" },
-      { x: 280, y: 260, label: "DCV" },
-      { x: 80, y: 90, label: "TM" },
+      { x: 200, y: 145, num: 1, name: "Bowler", role: "bowler" },
+      { x: 185, y: 235, num: 2, name: "Wicketkeeper", role: "keeper" },
+      { x: 130, y: 200, num: 3, name: "Point", role: "fielder" },
+      { x: 155, y: 155, num: 4, name: "Short cover", role: "fielder" },
+      { x: 245, y: 155, num: 5, name: "Short midwicket", role: "fielder" },
+      { x: 270, y: 200, num: 6, name: "Square leg", role: "fielder" },
+      { x: 330, y: 130, num: 7, name: "Deep midwicket", role: "fielder" },
+      { x: 200, y: 60, num: 8, name: "Long-on", role: "fielder" },
+      { x: 70, y: 130, num: 9, name: "Deep cover", role: "fielder" },
     ],
   },
   middle_pace_rhb: {
     name: "Middle-overs squeeze",
     inside: 4,
     outside: 5,
-    text: "Dot-ball pressure: deep point, deep cover, long-on, deep midwicket, fine leg out. In-ring saves singles. Bowl hard lengths.",
+    text: "Dot-ball pressure. Sweepers at deep point, deep cover, long-on, deep midwicket, fine leg. Bowl hard lengths.",
     pos: [
-      { x: 180, y: 90, label: "BWL" },
-      { x: 250, y: 170, label: "PNT" },
-      { x: 230, y: 255, label: "COV" },
-      { x: 130, y: 255, label: "MDO" },
-      { x: 110, y: 170, label: "MDW" },
-      { x: 290, y: 230, label: "DPT" },
-      { x: 60, y: 250, label: "DCV" },
-      { x: 60, y: 90, label: "DMW" },
-      { x: 300, y: 90, label: "FL" },
+      { x: 200, y: 145, num: 1, name: "Bowler", role: "bowler" },
+      { x: 215, y: 235, num: 2, name: "Wicketkeeper", role: "keeper" },
+      { x: 265, y: 195, num: 3, name: "Point", role: "fielder" },
+      { x: 245, y: 155, num: 4, name: "Cover", role: "fielder" },
+      { x: 155, y: 155, num: 5, name: "Mid-on", role: "fielder" },
+      { x: 330, y: 220, num: 6, name: "Deep point", role: "fielder" },
+      { x: 340, y: 110, num: 7, name: "Deep cover", role: "fielder" },
+      { x: 60, y: 110, num: 8, name: "Deep midwicket", role: "fielder" },
+      { x: 70, y: 290, num: 9, name: "Fine leg", role: "fielder" },
     ],
   },
   middle_pace_lhb: {
     name: "Middle squeeze vs LHB",
     inside: 4,
     outside: 5,
-    text: "Mirrored sweepers. Bowl wide yorkers and back-of-length. Two on each side of the boundary, ring saves the single.",
+    text: "Mirrored sweepers. Bowl wide yorkers and back of length.",
     pos: [
-      { x: 180, y: 90, label: "BWL" },
-      { x: 110, y: 170, label: "PNT" },
-      { x: 130, y: 255, label: "COV" },
-      { x: 230, y: 255, label: "MDO" },
-      { x: 250, y: 170, label: "MDW" },
-      { x: 70, y: 230, label: "DPT" },
-      { x: 300, y: 250, label: "DCV" },
-      { x: 300, y: 90, label: "DMW" },
-      { x: 60, y: 90, label: "FL" },
+      { x: 200, y: 145, num: 1, name: "Bowler", role: "bowler" },
+      { x: 185, y: 235, num: 2, name: "Wicketkeeper", role: "keeper" },
+      { x: 135, y: 195, num: 3, name: "Point", role: "fielder" },
+      { x: 155, y: 155, num: 4, name: "Cover", role: "fielder" },
+      { x: 245, y: 155, num: 5, name: "Mid-on", role: "fielder" },
+      { x: 70, y: 220, num: 6, name: "Deep point", role: "fielder" },
+      { x: 60, y: 110, num: 7, name: "Deep cover", role: "fielder" },
+      { x: 340, y: 110, num: 8, name: "Deep midwicket", role: "fielder" },
+      { x: 330, y: 290, num: 9, name: "Fine leg", role: "fielder" },
     ],
   },
   middle_spin_rhb: {
     name: "Spin choke",
     inside: 4,
     outside: 5,
-    text: "Boundary riders at deep midwicket, long-on, long-off, deep cover, deep point. Bowler attacks the stumps; force the sweep into the long boundary.",
+    text: "Boundary riders both sides. Attack the stumps; force the sweep into the long boundary.",
     pos: [
-      { x: 180, y: 90, label: "BWL" },
-      { x: 225, y: 200, label: "PNT" },
-      { x: 150, y: 220, label: "SMW" },
-      { x: 125, y: 160, label: "NSL" },
-      { x: 210, y: 160, label: "SHM" },
-      { x: 70, y: 250, label: "DMW" },
-      { x: 180, y: 320, label: "LON" },
-      { x: 180, y: 55, label: "LOF" },
-      { x: 290, y: 250, label: "DCV" },
+      { x: 200, y: 145, num: 1, name: "Bowler", role: "bowler" },
+      { x: 215, y: 235, num: 2, name: "Wicketkeeper", role: "keeper" },
+      { x: 255, y: 195, num: 3, name: "Point", role: "fielder" },
+      { x: 145, y: 195, num: 4, name: "Square leg", role: "fielder" },
+      { x: 245, y: 145, num: 5, name: "Short cover", role: "fielder" },
+      { x: 60, y: 130, num: 6, name: "Deep midwicket", role: "fielder" },
+      { x: 200, y: 50, num: 7, name: "Long-on", role: "fielder" },
+      { x: 290, y: 75, num: 8, name: "Long-off", role: "fielder" },
+      { x: 340, y: 200, num: 9, name: "Deep cover", role: "fielder" },
     ],
   },
   middle_spin_lhb: {
     name: "Spin choke vs LHB",
     inside: 4,
     outside: 5,
-    text: "Sweepers cover both sides. Drift in, dip out. The slog-sweep is the trap — deep midwicket on the LHB side stays squarer.",
+    text: "Sweepers cover both sides. The slog-sweep is the trap.",
     pos: [
-      { x: 180, y: 90, label: "BWL" },
-      { x: 135, y: 200, label: "PNT" },
-      { x: 210, y: 220, label: "SMW" },
-      { x: 235, y: 160, label: "NSL" },
-      { x: 150, y: 160, label: "SHM" },
-      { x: 290, y: 250, label: "DMW" },
-      { x: 180, y: 320, label: "LON" },
-      { x: 180, y: 55, label: "LOF" },
-      { x: 70, y: 250, label: "DCV" },
+      { x: 200, y: 145, num: 1, name: "Bowler", role: "bowler" },
+      { x: 185, y: 235, num: 2, name: "Wicketkeeper", role: "keeper" },
+      { x: 145, y: 195, num: 3, name: "Point", role: "fielder" },
+      { x: 255, y: 195, num: 4, name: "Square leg", role: "fielder" },
+      { x: 155, y: 145, num: 5, name: "Short cover", role: "fielder" },
+      { x: 340, y: 130, num: 6, name: "Deep midwicket", role: "fielder" },
+      { x: 200, y: 50, num: 7, name: "Long-on", role: "fielder" },
+      { x: 110, y: 75, num: 8, name: "Long-off", role: "fielder" },
+      { x: 60, y: 200, num: 9, name: "Deep cover", role: "fielder" },
     ],
   },
   death_pace_rhb: {
     name: "Death overs spread",
     inside: 4,
     outside: 5,
-    text: "Five on the rope. Yorker plan: deep point, deep cover, long-off, long-on, deep midwicket. Fine leg in. Bowler aims at base of stumps.",
+    text: "Five on the rope. Yorker plan — bowler aims at the base of the stumps.",
     pos: [
-      { x: 180, y: 90, label: "BWL" },
-      { x: 230, y: 150, label: "PNT" },
-      { x: 215, y: 225, label: "COV" },
-      { x: 145, y: 225, label: "MDO" },
-      { x: 225, y: 80, label: "FL" },
-      { x: 300, y: 210, label: "DPT" },
-      { x: 270, y: 290, label: "DCV" },
-      { x: 180, y: 55, label: "LOF" },
-      { x: 70, y: 290, label: "DMW" },
+      { x: 200, y: 145, num: 1, name: "Bowler", role: "bowler" },
+      { x: 215, y: 235, num: 2, name: "Wicketkeeper", role: "keeper" },
+      { x: 260, y: 175, num: 3, name: "Point", role: "fielder" },
+      { x: 245, y: 220, num: 4, name: "Cover", role: "fielder" },
+      { x: 235, y: 270, num: 5, name: "Fine leg", role: "fielder" },
+      { x: 350, y: 165, num: 6, name: "Deep point", role: "fielder" },
+      { x: 310, y: 60, num: 7, name: "Long-off", role: "fielder" },
+      { x: 90, y: 60, num: 8, name: "Long-on", role: "fielder" },
+      { x: 50, y: 165, num: 9, name: "Deep midwicket", role: "fielder" },
     ],
   },
   death_pace_lhb: {
     name: "Death overs vs LHB",
     inside: 4,
     outside: 5,
-    text: "Wide yorker into the LHB. Mirrored ring; sweepers on both sides; long-on slightly straighter to cut off the flick over square.",
+    text: "Wide yorker into the LHB. Mirrored ring; sweepers on both sides.",
     pos: [
-      { x: 180, y: 90, label: "BWL" },
-      { x: 130, y: 150, label: "PNT" },
-      { x: 145, y: 225, label: "COV" },
-      { x: 215, y: 225, label: "MDO" },
-      { x: 135, y: 80, label: "FL" },
-      { x: 60, y: 210, label: "DPT" },
-      { x: 90, y: 290, label: "DCV" },
-      { x: 180, y: 55, label: "LOF" },
-      { x: 290, y: 290, label: "DMW" },
+      { x: 200, y: 145, num: 1, name: "Bowler", role: "bowler" },
+      { x: 185, y: 235, num: 2, name: "Wicketkeeper", role: "keeper" },
+      { x: 140, y: 175, num: 3, name: "Point", role: "fielder" },
+      { x: 155, y: 220, num: 4, name: "Cover", role: "fielder" },
+      { x: 165, y: 270, num: 5, name: "Fine leg", role: "fielder" },
+      { x: 50, y: 165, num: 6, name: "Deep point", role: "fielder" },
+      { x: 90, y: 60, num: 7, name: "Long-off", role: "fielder" },
+      { x: 310, y: 60, num: 8, name: "Long-on", role: "fielder" },
+      { x: 350, y: 165, num: 9, name: "Deep midwicket", role: "fielder" },
     ],
   },
   death_spin_rhb: {
     name: "Death spin gamble",
     inside: 4,
     outside: 5,
-    text: "Spinner at the death only if the matchup is in your favour. All boundary riders straight and square. Bowl wide of off, deny the arc.",
+    text: "Spinner at the death only with a favourable matchup. Boundary riders straight and square.",
     pos: [
-      { x: 180, y: 90, label: "BWL" },
-      { x: 225, y: 200, label: "PNT" },
-      { x: 155, y: 225, label: "SMW" },
-      { x: 210, y: 150, label: "SHM" },
-      { x: 225, y: 75, label: "TM" },
-      { x: 60, y: 250, label: "DMW" },
-      { x: 180, y: 320, label: "LON" },
-      { x: 180, y: 55, label: "LOF" },
-      { x: 300, y: 250, label: "DCV" },
+      { x: 200, y: 145, num: 1, name: "Bowler", role: "bowler" },
+      { x: 215, y: 235, num: 2, name: "Wicketkeeper", role: "keeper" },
+      { x: 255, y: 195, num: 3, name: "Point", role: "fielder" },
+      { x: 145, y: 195, num: 4, name: "Square leg", role: "fielder" },
+      { x: 245, y: 150, num: 5, name: "Short midwicket", role: "fielder" },
+      { x: 60, y: 130, num: 6, name: "Deep midwicket", role: "fielder" },
+      { x: 200, y: 50, num: 7, name: "Long-on", role: "fielder" },
+      { x: 290, y: 75, num: 8, name: "Long-off", role: "fielder" },
+      { x: 340, y: 200, num: 9, name: "Deep cover", role: "fielder" },
     ],
   },
   death_spin_lhb: {
     name: "Death spin vs LHB",
     inside: 4,
     outside: 5,
-    text: "Bowl into the body and target the long boundary. The reverse-sweep is the only release shot — keep deep point honest.",
+    text: "Bowl into the body. Reverse-sweep is the only release shot.",
     pos: [
-      { x: 180, y: 90, label: "BWL" },
-      { x: 135, y: 200, label: "PNT" },
-      { x: 205, y: 225, label: "SMW" },
-      { x: 150, y: 150, label: "SHM" },
-      { x: 135, y: 75, label: "TM" },
-      { x: 300, y: 250, label: "DMW" },
-      { x: 180, y: 320, label: "LON" },
-      { x: 180, y: 55, label: "LOF" },
-      { x: 60, y: 250, label: "DCV" },
+      { x: 200, y: 145, num: 1, name: "Bowler", role: "bowler" },
+      { x: 185, y: 235, num: 2, name: "Wicketkeeper", role: "keeper" },
+      { x: 145, y: 195, num: 3, name: "Point", role: "fielder" },
+      { x: 255, y: 195, num: 4, name: "Square leg", role: "fielder" },
+      { x: 155, y: 150, num: 5, name: "Short midwicket", role: "fielder" },
+      { x: 340, y: 130, num: 6, name: "Deep midwicket", role: "fielder" },
+      { x: 200, y: 50, num: 7, name: "Long-on", role: "fielder" },
+      { x: 110, y: 75, num: 8, name: "Long-off", role: "fielder" },
+      { x: 60, y: 200, num: 9, name: "Deep cover", role: "fielder" },
     ],
   },
 };
@@ -231,6 +240,7 @@ export default function FieldSetter() {
   const [phase, setPhase] = useState<Phase>("powerplay");
   const [bowler, setBowler] = useState<Bowler>("pace");
   const [batter, setBatter] = useState<Batter>("rhb");
+  const [hovered, setHovered] = useState<Fielder | null>(null);
 
   const setup = useMemo<Setup>(() => {
     const key = `${phase}_${bucket(bowler)}_${batter}`;
@@ -239,66 +249,164 @@ export default function FieldSetter() {
 
   return (
     <div className="grid grid-cols-1 gap-6 md:grid-cols-[1.4fr_1fr]">
-      <div className="rounded-xl bg-pitch-50 p-3">
+      {/* The pitch */}
+      <div className="rounded-2xl border border-ink-700 bg-ink-900 p-4">
         <svg
-          viewBox="0 0 360 360"
+          viewBox="0 0 400 400"
           xmlns="http://www.w3.org/2000/svg"
           className="block h-auto w-full"
           role="img"
           aria-label={`Field placement for ${setup.name}`}
         >
-          <circle cx="180" cy="180" r="170" fill="#97C459" stroke="#639922" />
+          <defs>
+            <radialGradient id="grass" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stopColor="#3F7821" />
+              <stop offset="70%" stopColor="#2D5816" />
+              <stop offset="100%" stopColor="#1E3D0E" />
+            </radialGradient>
+            <radialGradient id="infield" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stopColor="#4A8D27" />
+              <stop offset="100%" stopColor="#3F7821" />
+            </radialGradient>
+          </defs>
+
+          {/* Outfield, boundary, ring */}
           <circle
-            cx="180"
-            cy="180"
-            r="105"
+            cx={200}
+            cy={200}
+            r={188}
+            fill="url(#grass)"
+            stroke="#5C5C66"
+            strokeWidth={1}
+          />
+          <circle
+            cx={200}
+            cy={200}
+            r={188}
             fill="none"
-            stroke="#fff"
-            strokeDasharray="4 3"
-            opacity={0.8}
+            stroke="#FFFFFF"
+            strokeWidth={1.5}
+            opacity={0.7}
           />
-          <circle cx="180" cy="180" r="45" fill="#C0DD97" opacity={0.6} />
+          <circle
+            cx={200}
+            cy={200}
+            r={110}
+            fill="url(#infield)"
+            opacity={0.5}
+          />
+          <circle
+            cx={200}
+            cy={200}
+            r={110}
+            fill="none"
+            stroke="#FFFFFF"
+            strokeWidth={1}
+            strokeDasharray="5 4"
+            opacity={0.65}
+          />
+
+          {/* Pitch */}
+          <ellipse
+            cx={200}
+            cy={200}
+            rx={28}
+            ry={56}
+            fill="#C9A876"
+            opacity={0.55}
+          />
           <rect
-            x="172"
-            y="155"
-            width="16"
-            height="50"
-            fill="#FAEEDA"
-            stroke="#BA7517"
+            x={193}
+            y={170}
+            width={14}
+            height={60}
+            fill="#D9BC8E"
+            stroke="#7A5A3A"
+            strokeWidth={0.5}
           />
-          {setup.pos.map((f, i) => {
-            const isBowler = f.label === "BWL";
+          <line
+            x1={193}
+            y1={180}
+            x2={207}
+            y2={180}
+            stroke="#7A5A3A"
+            strokeWidth={0.5}
+          />
+          <line
+            x1={193}
+            y1={220}
+            x2={207}
+            y2={220}
+            stroke="#7A5A3A"
+            strokeWidth={0.5}
+          />
+
+          {/* Stumps as small marks */}
+          <g stroke="#7A5A3A" strokeWidth={0.8}>
+            <line x1={197} y1={172} x2={197} y2={178} />
+            <line x1={200} y1={172} x2={200} y2={178} />
+            <line x1={203} y1={172} x2={203} y2={178} />
+            <line x1={197} y1={222} x2={197} y2={228} />
+            <line x1={200} y1={222} x2={200} y2={228} />
+            <line x1={203} y1={222} x2={203} y2={228} />
+          </g>
+
+          {/* Fielders */}
+          {setup.pos.map((f) => {
+            const color =
+              f.role === "bowler"
+                ? "#FF4D2E"
+                : f.role === "keeper"
+                  ? "#E53935"
+                  : "#1976D2";
             return (
-              <g key={i}>
+              <motion.g
+                key={f.num}
+                initial={{ scale: 0, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{
+                  delay: f.num * 0.04,
+                  type: "spring",
+                  stiffness: 280,
+                  damping: 20,
+                }}
+                onMouseEnter={() => setHovered(f)}
+                onMouseLeave={() => setHovered(null)}
+                style={{ cursor: "pointer" }}
+              >
                 <circle
                   cx={f.x}
                   cy={f.y}
-                  r={11}
-                  fill={isBowler ? "#993C1D" : "#185FA5"}
-                  stroke="#fff"
-                  strokeWidth={1.5}
+                  r={13}
+                  fill={color}
+                  stroke="#FFFFFF"
+                  strokeWidth={2}
                 />
                 <text
                   x={f.x}
-                  y={f.y + 3}
+                  y={f.y + 4}
                   textAnchor="middle"
-                  fontSize={8}
+                  fontSize={12}
                   fontWeight={500}
-                  fill="#fff"
+                  fill="#FFFFFF"
+                  fontFamily="system-ui"
                 >
-                  {f.label}
+                  {f.num}
                 </text>
-              </g>
+              </motion.g>
             );
           })}
         </svg>
-        <div className="mt-2 flex justify-between px-1 text-xs text-pitch-900/60">
-          <span>Fine leg side</span>
-          <span>{batter === "rhb" ? "RHB batting ↑" : "LHB batting ↑"}</span>
-          <span>Off side</span>
+
+        {/* Legend */}
+        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 px-1 text-xs text-ink-400">
+          <LegendDot color="#FF4D2E" label="Bowler" />
+          <LegendDot color="#E53935" label="Keeper" />
+          <LegendDot color="#1976D2" label="Fielder" />
         </div>
       </div>
 
+      {/* Side panel */}
       <div className="space-y-3">
         <Selector
           label="Match phase"
@@ -331,16 +439,47 @@ export default function FieldSetter() {
           ]}
         />
 
-        <div className="rounded-xl bg-white p-4 ring-1 ring-pitch-900/10">
-          <div className="text-xs text-pitch-900/60">Setup</div>
-          <div className="text-base font-medium">{setup.name}</div>
+        <div className="rounded-2xl border border-ink-700 bg-ink-900 p-4">
+          <div className="text-xs uppercase tracking-widest text-ink-500">
+            Setup
+          </div>
+          <div className="mt-1 text-base font-medium text-ink-100">
+            {setup.name}
+          </div>
           <div className="mt-3 grid grid-cols-2 gap-2">
             <Stat label="Inside circle" value={setup.inside} />
             <Stat label="Outside" value={setup.outside} />
           </div>
-          <p className="mt-3 text-sm leading-relaxed text-pitch-900/80">
+          <p className="mt-3 text-sm leading-relaxed text-ink-300">
             {setup.text}
           </p>
+
+          {/* Numbered fielder list */}
+          <div className="mt-4 grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs">
+            {setup.pos.map((f) => (
+              <div
+                key={f.num}
+                className={`flex items-center gap-2 transition ${
+                  hovered?.num === f.num ? "text-ink-50" : "text-ink-400"
+                }`}
+              >
+                <span
+                  className="inline-flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-medium text-white"
+                  style={{
+                    background:
+                      f.role === "bowler"
+                        ? "#FF4D2E"
+                        : f.role === "keeper"
+                          ? "#E53935"
+                          : "#1976D2",
+                  }}
+                >
+                  {f.num}
+                </span>
+                <span>{f.name}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>
@@ -360,11 +499,13 @@ function Selector({
 }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-xs text-pitch-900/60">{label}</span>
+      <span className="mb-1 block text-xs uppercase tracking-widest text-ink-500">
+        {label}
+      </span>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-md border border-pitch-900/15 bg-white px-3 py-2 text-sm"
+        className="w-full rounded-xl border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-ink-100 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/30"
       >
         {options.map((o) => (
           <option key={o.v} value={o.v}>
@@ -378,9 +519,21 @@ function Selector({
 
 function Stat({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-md bg-pitch-50 px-3 py-2">
-      <div className="text-xs text-pitch-900/60">{label}</div>
-      <div className="text-lg font-medium">{value}</div>
+    <div className="rounded-lg bg-ink-800 px-3 py-2">
+      <div className="text-xs text-ink-500">{label}</div>
+      <div className="text-lg font-medium text-ink-100">{value}</div>
+    </div>
+  );
+}
+
+function LegendDot({ color, label }: { color: string; label: string }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <span
+        className="inline-block h-2.5 w-2.5 rounded-full"
+        style={{ background: color }}
+      />
+      <span>{label}</span>
     </div>
   );
 }

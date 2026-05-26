@@ -3,12 +3,58 @@
 @tailwind utilities;
 
 :root {
-  --bg: 250 250 249;
-  --fg: 23 52 4;
+  color-scheme: dark;
 }
 
+html,
 body {
-  background: rgb(var(--bg));
-  color: rgb(var(--fg));
+  background: #0a0a0b;
+  color: #f0f0f3;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   font-feature-settings: "ss01", "cv11";
+}
+
+/* Premium subtle grid texture on body for depth */
+body {
+  background-image: radial-gradient(
+      circle at 20% 0%,
+      rgba(255, 77, 46, 0.06),
+      transparent 50%
+    ),
+    radial-gradient(
+      circle at 80% 100%,
+      rgba(61, 214, 140, 0.04),
+      transparent 50%
+    );
+  background-attachment: fixed;
+  min-height: 100vh;
+}
+
+/* Inputs feel native to dark mode */
+input,
+select,
+textarea {
+  color-scheme: dark;
+}
+
+/* Smooth font rendering */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Custom scrollbar in dark mode */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: #0a0a0b;
+}
+::-webkit-scrollbar-thumb {
+  background: #26262b;
+  border-radius: 5px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3a3a40;
 }
