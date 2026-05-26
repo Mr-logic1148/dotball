@@ -28,8 +28,8 @@ export default function Home() {
   if (!user) {
     return (
       <LandingLoggedOut
-        onSignIn={() => router.push("./login")}
-        onCreate={() => router.push("./register")}
+        onSignIn={() => router.push("/login")}
+        onCreate={() => router.push("/register")}
       />
     );
   }
